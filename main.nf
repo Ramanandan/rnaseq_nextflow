@@ -7,6 +7,25 @@ params.genome = ""
 params.gtf = ""
 params.outputDir = ""
 
+log.info "RNASeq Pipeline - NextFlow  ~  version 0.1"
+log.info "====================================="
+log.info "reads                  : ${params.reads}"
+log.info "genome                 : ${params.genome}"
+log.info "gtf                    : ${params.gtf}"
+log.info "output directory       : ${params.outputDir}"
+log.info "\n"
+
+/*
+ * validate input files
+ */
+
+genome_file = file(params.genome)
+gtf_file = file(params.gtf)
+
+if( !genome_file.exists() ) exit 1, "Missing genome file: ${genome_file}"
+
+if( !gtf_file.exists() ) exit 1, "Missing genome annotation GTF file: ${gtf_file}"
+
 Channel
     .fromFilePairs( params.reads )
     .ifEmpty { error "Cannot find any reads matching: ${params.reads}" }
@@ -160,7 +179,7 @@ process Feature_count{
 
         output:
 	file "*.gene.featurecount.txt" into geneCounts
-        file "*.gene.featurecounts.txt.summary" into featureCounts_logs
+        file "*.gene.featurecount.txt.summary" into featureCounts_logs
 
 	script:
 	"""
@@ -174,18 +193,20 @@ process Feature_count{
 process QC_Using_Qualimap{
         tag "$name"
         publishDir "${params.outputDir}/Qualimap_QC/" , mode: 'copy', pattern: "*.pdf"
-
+	publishDir "${params.outputDir}/Qualimap_QC/" , mode: 'copy', pattern: "*.txt"
+	
         input:
 	path gtf from params.gtf
-	set name, file(bam_file2) from sorted_bam_for_qualimap
+	set val(name), file(bam_file2) from sorted_bam_for_qualimap
         file(bam_indices2) from sorted_bam_indices_for_qualimap
 	
         output:
-        set val(name), file("*.pdf") into qualimap_output
+        file "*.pdf" into qualimap_output
+        file "*.txt" into qualimap_output_txt
 
         script:
         """
-        qualimap rnaseq -s -a proportional -bam ${bam_file2} -p non-strand-specific -gtf ${gtf} -outformat PDF --java-mem-size=6G
+        qualimap rnaseq -s -a proportional -bam ${bam_file2} -p non-strand-specific -gtf ${gtf} -outformat PDF -outdir ./ -outfile ${name}.pdf --java-mem-size=6G
         """
 }
 workflow.onComplete { 
